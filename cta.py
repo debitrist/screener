@@ -11,20 +11,31 @@ symbol = ['spy','qqq','iwm','^HSI']
 
 d = {ticker: {} for ticker in symbol}
 
+windowlist = ['2W','1M','3M','6M','1Y']
+windowper = [10,21,63,126,252]
+voltarget = 12
+
 for ticker in symbol:
     print(ticker)
-    d[ticker]['px'] = web.DataReader(ticker, 'yahoo', datetime.datetime(2015, 1, 1), datetime.datetime.now())
-    
+    d[ticker]['px'] = web.DataReader(ticker, 'yahoo', datetime.datetime(1995, 1, 1), datetime.datetime.now())
+
     df = d[ticker]['px']
-    df['2W']=df['Close'].shift(10)
-    df['1M']=df['Close'].shift(21)
-    df['3M']=df['Close'].shift(63)
-    df['6M']=df['Close'].shift(126)
-    df['1Y']=df['Close'].shift(252)
+    df['Close Ret'] = df['Close'].pct_change()
+
+    for x,y in zip(windowlist,windowper):
+        df[x]=df['Close'].shift(y)
+        df[x+str('momret')]=df['Close']/df[x]-1
+        df[x+str('stdev')]=voltarget/(df['Close Ret'].rolling(y).std()*100*(252**0.5))
+        df[x+str('momsig')] = np.where(df[x+str('momret')].shift()>0, df['Close Ret'], np.where(df[x+str('momret')].shift()<0,-df['Close Ret'],0))
+        df[x+str('momsigLO')] = np.where(df[x+str('momret')].shift()>0, df['Close Ret'], 0)
+        df[x+str('simret')]=np.exp(np.log(1+(df[x+str('momsig')]*df[x+str('stdev')].shift())).cumsum())
+        df[x+str('simretLO')]=np.exp(np.log(1+(df[x+str('momsigLO')]*df[x+str('stdev')].shift())).cumsum())
+
+
 
     pricelvls = [df.iloc[-1]['Close']]
 
-    for window in ['2W','1M','3M','6M','1Y']:
+    for window in windowlist:
         pricelvls.append(df[window][-1])
         pricelvls.append(df[window][-1]+0.1)
         pricelvls.append(df[window][-1]-0.1)
@@ -52,6 +63,5 @@ ctatable = pd.DataFrame(
       round(d[ticker]['cta']['Px Lvls'][d[ticker]['cta']['pos'] == 100].values[0],2)] for ticker in symbol],
     columns=['2W','1M','3M','6M','1Y','pos','lastclose','shortpx','longpx'], index=symbol)
 
-print(ctatable)
-
+d['spy']['px'].to_csv('test.csv')
 
